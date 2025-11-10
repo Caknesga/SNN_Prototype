@@ -4,19 +4,19 @@ from torch.utils.data import DataLoader
 import tonic
 import tonic.transforms as transforms
 import snntorch as snn
-from snntorch import functional as SF
+from snntorch import functional as SF # NOT REALLY NECCESARY
 import numpy as np
 
 # ------------------------------
 # 1. Parameters
 # ------------------------------
 batch_size = 64
-num_epochs = 1
+num_epochs = 1. #maximum 2-3 is fine
 beta = 0.9
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ------------------------------
-# 2. Load NMNIST Dataset via Tonic
+# 2. Load NMNIST Dataset via Tonic and transform
 # ------------------------------
 sensor_size = tonic.datasets.NMNIST.sensor_size
 
@@ -33,12 +33,12 @@ test_dataset = tonic.datasets.NMNIST(
     save_to="data/", transform=frame_transform,train=False
 )
 
-def pad_to_fixed_length(batch, max_time=300):
+def pad_to_fixed_length(batch, max_time=300): #It converts irregular event sequences into fixed-length tensor
     data_list, targets = zip(*batch)
 
     padded_data = []
     for data in data_list:
-        if isinstance(data, np.ndarray):   # convert NumPy → Tensor if needed
+        if isinstance(data, np.ndarray):   # convert NumPy
             data = torch.tensor(data, dtype=torch.float32)
 
         t, c, h, w = data.shape
@@ -58,7 +58,7 @@ train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
                          num_workers=0, collate_fn=lambda b: pad_to_fixed_length(b, 300))
 
-num_steps = train_dataset[0][0].shape[0]  # temporal length
+num_steps = train_dataset[0][0].shape[0]  # temporaal length
 
 # ------------------------------
 # 3. Define Simple SNN
@@ -122,7 +122,7 @@ with torch.no_grad():
         data = data.to(device)
         targets = targets.to(device)
         spk_rec = net(data)
-        spk_sum = spk_rec.sum(dim=0)
+        spk_sum = spk_rec.sum(dim=1)
         preds = spk_sum.argmax(1)
         correct += (preds == targets).sum().item()
         total += targets.size(0)
