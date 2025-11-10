@@ -1,3 +1,4 @@
+#essential libraries
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -5,27 +6,27 @@ import tonic
 import tonic.transforms as transforms
 import snntorch as snn
 from snntorch import functional as SF # NOT REALLY NECCESARY
-import numpy as np
+import numpy as np 
 
 # ------------------------------
 # 1. Parameters
 # ------------------------------
-batch_size = 64
-num_epochs = 1. #maximum 2-3 is fine
-beta = 0.9
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+batch_size = 64 #number of samples processed in one optimizer(backpropagation) step, 64-256 is fine on CPU, 
+num_epochs = 1  #maximum 2-3 is fine
+beta = 0.9      #LIF leak factor per simulation step
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  #run on GPU if present; else CPU
 
 # ------------------------------
 # 2. Load NMNIST Dataset via Tonic and transform
 # ------------------------------
-sensor_size = tonic.datasets.NMNIST.sensor_size
+sensor_size = tonic.datasets.NMNIST.sensor_size #Instead of frames, it outputs spike events with: (x,y,polarity,timestamp)
 
-frame_transform = transforms.Compose([
-    transforms.Denoise(filter_time=10000),
-    transforms.ToFrame(sensor_size=sensor_size, time_window=1000)
+frame_transform = transforms.Compose([ #defines how raw event streams are converted into tensor frames usable by PyTorch. 
+    transforms.Denoise(filter_time=10000), #Removes isolated or spurious spikes that occur within 10 ms of inactivity.                       
+    transforms.ToFrame(sensor_size=sensor_size, time_window=1000)  #, adds a time dimension so our tensor will be 4D, ! smaller timewindow, smaller beta
 ])
 
-
+#train and test dataset donwkload and transform 
 train_dataset = tonic.datasets.NMNIST(
     save_to="data/", transform=frame_transform, train=True
 )
@@ -33,7 +34,8 @@ test_dataset = tonic.datasets.NMNIST(
     save_to="data/", transform=frame_transform,train=False
 )
 
-def pad_to_fixed_length(batch, max_time=300): #It converts irregular event sequences into fixed-length tensor
+#following method can be optimized
+def pad_to_fixed_length(batch, max_time=300): #It converts irregular event sequences into fixed-length tensor for back-prop
     data_list, targets = zip(*batch)
 
     padded_data = []
@@ -53,15 +55,14 @@ def pad_to_fixed_length(batch, max_time=300): #It converts irregular event seque
     targets = torch.tensor(targets, dtype=torch.long)
     return data_batch, targets
 
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,
+#train and test data loader using Dataloader from torch, it is for back-prop neccesary
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, #Feeds batches of NMNIST samples to your network during backpropagation
                           num_workers=0, collate_fn=lambda b: pad_to_fixed_length(b, 300))
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
-                         num_workers=0, collate_fn=lambda b: pad_to_fixed_length(b, 300))
-
-num_steps = train_dataset[0][0].shape[0]  # temporaal length
+                         num_workers=0, collate_fn=lambda b: pad_to_fixed_length(b, 300)) #maybe we can decrease the training time with num_workers>0 ?
 
 # ------------------------------
-# 3. Define Simple SNN
+# 3. Define Simple SNN without convolution
 # ------------------------------
 class Net(nn.Module):
     def __init__(self):
@@ -71,7 +72,8 @@ class Net(nn.Module):
         self.lif1 = snn.Leaky(beta=beta)
         self.fc2 = nn.Linear(100, 10)
         self.lif2 = snn.Leaky(beta=beta)
-
+        #2 layer is enoguh fot NMNIST dataset, Loihi 2 uses 3-5 layer
+     
     def forward(self, x):
         mem1 = self.lif1.init_leaky()
         mem2 = self.lif2.init_leaky()
