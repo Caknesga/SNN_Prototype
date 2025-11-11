@@ -11,7 +11,7 @@ import numpy as np
 # ------------------------------
 # 1. Parameters
 # ------------------------------
-batch_size = 64 #number of samples processed in one optimizer(backpropagation) step, 64-256 is fine on CPU, 
+batch_size = 16 #number of samples processed in one optimizer(backpropagation) step, 64-256 is fine on CPU, 
 num_epochs = 1  #maximum 2-3 is fine
 beta = 0.9      #LIF leak factor per simulation step
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  #run on GPU if present; else CPU
@@ -23,7 +23,7 @@ sensor_size = tonic.datasets.NMNIST.sensor_size #Instead of frames, it outputs s
 
 frame_transform = transforms.Compose([ #defines how raw event streams are converted into tensor frames usable by PyTorch. 
     transforms.Denoise(filter_time=10000), #Removes isolated or spurious spikes that occur within 10 ms of inactivity.                       
-    transforms.ToFrame(sensor_size=sensor_size, time_window=1000)  #, adds a time dimension so our tensor will be 4D, ! smaller timewindow, smaller beta
+    transforms.ToFrame(sensor_size=sensor_size, time_window=5000)  #, adds a time dimension so our tensor will be 4D, ! smaller timewindow, smaller beta
 ])
 
 #train and test dataset donwkload and transform 
@@ -57,9 +57,9 @@ def pad_to_fixed_length(batch, max_time=300): #It converts irregular event seque
 
 #train and test data loader using Dataloader from torch, it is for back-prop neccesary
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, #Feeds batches of NMNIST samples to your network during backpropagation
-                          num_workers=0, collate_fn=lambda b: pad_to_fixed_length(b, 300))
+                          num_workers=0, collate_fn=lambda b: pad_to_fixed_length(b, 100))
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False,
-                         num_workers=0, collate_fn=lambda b: pad_to_fixed_length(b, 300)) #maybe we can decrease the training time with num_workers>0 ?
+                         num_workers=0, collate_fn=lambda b: pad_to_fixed_length(b, 100)) #maybe we can decrease the training time with num_workers>0 ?
 
 # ------------------------------
 # 3. Define Simple SNN without convolution
@@ -68,9 +68,9 @@ class Net(nn.Module):
     def __init__(self):
         super().__init__()
         in_features = 2 * 34 * 34   # DVS polarity channels × height × width
-        self.fc1 = nn.Linear(in_features, 100)
+        self.fc1 = nn.Linear(in_features, 32)
         self.lif1 = snn.Leaky(beta=beta)
-        self.fc2 = nn.Linear(100, 10)
+        self.fc2 = nn.Linear(32, 10)
         self.lif2 = snn.Leaky(beta=beta)
         #2 layer is enoguh fot NMNIST dataset, Loihi 2 uses 3-5 layer
      
